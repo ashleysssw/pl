@@ -1,0 +1,255 @@
+
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>OptiCarga - Gestión Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+<header class="bg-blue-700 text-white p-4 text-center text-3xl font-bold shadow">
+    OptiCarga - Gestión Pro
+</header>
+<img src="https://i.ibb.co/zHWfX03b/Captura-de-pantalla-2025-06-13-190133.png" style="display: block; margin: 20px auto; max-width: 200px;" alt="Logo de OptiCarga"/>
+<section class="flex flex-col items-center justify-center mt-20" id="loginSection">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+        <h2 class="text-xl font-bold mb-4 text-center text-blue-700">Inicio de Sesión</h2>
+        <input class="w-full mb-3 px-4 py-2 border rounded" id="user" placeholder="Usuario" type="text"/>
+        <input class="w-full mb-3 px-4 py-2 border rounded" id="pass" placeholder="Contraseña" type="password"/>
+        <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700" onclick="login()">Ingresar</button>
+        <p class="text-red-500 mt-2 text-center" id="login-error"></p>
+    </div>
+</section>
+<section class="hidden p-6 max-w-6xl mx-auto mt-6 bg-white rounded-lg shadow-lg" id="appSection">
+    <nav class="flex gap-4 mb-6">
+        <button class="ml-auto bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded" onclick="cerrarSesion()">Cerrar sesión</button>
+        <button class="tab-btn bg-blue-100 px-4 py-2 rounded font-semibold text-blue-700" onclick="switchTab('stock')">Stock</button>
+        <button class="tab-btn bg-green-100 px-4 py-2 rounded font-semibold text-green-700" onclick="switchTab('despacho')">Despacho</button>
+        <button class="tab-btn bg-purple-100 px-4 py-2 rounded font-semibold text-purple-700" onclick="switchTab('reportes')">Reportes</button>
+    </nav>
+    <div id="tab-stock">
+        <h2 class="text-2xl font-bold text-blue-700 mb-4">Gestión de Stock</h2>
+        <div class="flex gap-4 mb-4">
+            <input class="px-4 py-2 border rounded w-full" id="productName" placeholder="Nombre del producto"/>
+            <input class="px-4 py-2 border rounded w-40" id="productWeight" placeholder="Peso (kg)" type="number"/>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" id="productBtn" onclick="handleProductAction()">Agregar</button>
+        </div>
+        <table class="w-full text-sm border">
+            <thead class="bg-blue-100">
+                <tr>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Peso (kg)</th>
+                    <th scope="col">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="productTable"></tbody>
+        </table>
+        <h3 class="text-xl font-semibold text-blue-600 mt-8 mb-2">Vehículos</h3>
+        <div class="flex gap-4 mb-4">
+            <input class="px-4 py-2 border rounded w-full" id="vehicleName" placeholder="Nombre del vehículo"/>
+            <input class="px-4 py-2 border rounded w-40" id="vehicleCap" placeholder="Capacidad (kg)" type="number"/>
+            <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded" id="vehicleBtn" onclick="handleVehicleAction()">Agregar</button>
+        </div>
+        <table class="w-full text-sm border">
+            <thead class="bg-green-100">
+                <tr>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Capacidad (kg)</th>
+                    <th scope="col">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="vehicleTable"></tbody>
+        </table>
+    </div>
+    <div class="hidden" id="tab-despacho">
+        <h2 class="text-2xl font-bold text-green-700 mb-4">Asignación de Productos</h2>
+        <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded mb-4" onclick="asignarProductos()">Asignar automáticamente</button>
+        <table class="w-full text-sm border">
+            <thead class="bg-green-100">
+                <tr>
+                    <th scope="col">Vehículo</th>
+                    <th scope="col">Capacidad Total</th>
+                    <th scope="col">Productos Asignados</th>
+                    <th scope="col">Carga Total (kg)</th>
+                </tr>
+            </thead>
+            <tbody id="asignacionTable"></tbody>
+        </table>
+    </div>
+    <div class="hidden" id="tab-reportes">
+        <h2 class="text-2xl font-bold text-purple-700 mb-4">Reportes Finales</h2>
+        <button class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded" onclick="generarPDF()">Generar PDF</button>
+        <p class="mt-4 text-sm text-gray-600">El reporte incluye la asignación actual de productos por vehículo.</p>
+    </div>
+</section>
+<script>
+    const USER = "ADMIN", PASS = "12345";
+    let productos = [], vehiculos = [], asignacion = {};
+    let editIndex = -1, editVehicleIndex = -1;
+
+    function login() {
+        const u = document.getElementById('user').value;
+        const p = document.getElementById('pass').value;
+        const loginError = document.getElementById('login-error');
+        if (u === USER && p === PASS) {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('appSection').classList.remove('hidden');
+            loginError.innerText = "";
+            productos = JSON.parse(localStorage.getItem('productos') || '[]');
+            vehiculos = JSON.parse(localStorage.getItem('vehiculos') || '[]');
+            asignacion = JSON.parse(localStorage.getItem('asignacion') || '{}');
+            updateProductTable();
+            updateVehicleTable();
+        } else {
+            loginError.innerText = "Credenciales incorrectas";
+        }
+    }
+
+    function switchTab(tab) {
+        ['stock', 'despacho', 'reportes'].forEach(id => {
+            document.getElementById(`tab-${id}`).classList.add('hidden');
+        });
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    }
+
+    function handleProductAction() {
+        const name = document.getElementById('productName').value;
+        const weight = parseFloat(document.getElementById('productWeight').value);
+        if (!name || weight <= 0) return;
+        if (editIndex >= 0) {
+            productos[editIndex] = { name, weight };
+            editIndex = -1;
+            document.getElementById('productBtn').innerText = "Agregar";
+        } else {
+            productos.push({ name, weight });
+        }
+        document.getElementById('productName').value = '';
+        document.getElementById('productWeight').value = '';
+        updateProductTable();
+        localStorage.setItem("productos", JSON.stringify(productos));
+    }
+
+    function editProduct(index) {
+        const prod = productos[index];
+        document.getElementById('productName').value = prod.name;
+        document.getElementById('productWeight').value = prod.weight;
+        document.getElementById('productBtn').innerText = "Actualizar";
+        editIndex = index;
+    }
+
+    function removeProduct(index) {
+        productos.splice(index, 1);
+        updateProductTable();
+        localStorage.setItem("productos", JSON.stringify(productos));
+    }
+
+    function updateProductTable() {
+        const table = document.getElementById('productTable');
+        table.innerHTML = '';
+        productos.forEach((p, i) => {
+            table.innerHTML += `<tr>
+                <td>${p.name}</td>
+                <td>${p.weight.toFixed(2)}</td>
+                <td>
+                    <button onclick="editProduct(${i})" class="bg-yellow-400 text-white px-2 py-1 rounded mr-1">Editar</button>
+                    <button onclick="removeProduct(${i})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">Eliminar</button>
+                </td></tr>`;
+        });
+    }
+
+    function handleVehicleAction() {
+        const name = document.getElementById('vehicleName').value;
+        const capacity = parseFloat(document.getElementById('vehicleCap').value);
+        if (!name || capacity <= 0) return;
+        if (editVehicleIndex >= 0) {
+            vehiculos[editVehicleIndex] = { name, capacity };
+            editVehicleIndex = -1;
+            document.getElementById('vehicleBtn').innerText = "Agregar";
+        } else {
+            vehiculos.push({ name, capacity });
+        }
+        document.getElementById('vehicleName').value = '';
+        document.getElementById('vehicleCap').value = '';
+        updateVehicleTable();
+        localStorage.setItem("vehiculos", JSON.stringify(vehiculos));
+    }
+
+    function editVehicle(index) {
+        const v = vehiculos[index];
+        document.getElementById('vehicleName').value = v.name;
+        document.getElementById('vehicleCap').value = v.capacity;
+        document.getElementById('vehicleBtn').innerText = "Actualizar";
+        editVehicleIndex = index;
+    }
+
+    function removeVehicle(index) {
+        vehiculos.splice(index, 1);
+        updateVehicleTable();
+        localStorage.setItem("vehiculos", JSON.stringify(vehiculos));
+    }
+
+    function updateVehicleTable() {
+        const table = document.getElementById('vehicleTable');
+        table.innerHTML = '';
+        vehiculos.forEach((v, i) => {
+            table.innerHTML += `<tr>
+                <td>${v.name}</td>
+                <td>${v.capacity.toFixed(2)}</td>
+                <td>
+                    <button onclick="editVehicle(${i})" class="bg-yellow-400 text-white px-2 py-1 rounded mr-1">Editar</button>
+                    <button onclick="removeVehicle(${i})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">Eliminar</button>
+                </td></tr>`;
+        });
+    }
+
+    function asignarProductos() {
+        asignacion = {};
+        let disponibles = vehiculos.map(v => ({ ...v, carga: 0, productos: [] }));
+        productos.forEach(prod => {
+            for (let v of disponibles) {
+                if (v.carga + prod.weight <= v.capacity) {
+                    v.productos.push(prod.name);
+                    v.carga += prod.weight;
+                    break;
+                }
+            }
+        });
+        disponibles.forEach(v => asignacion[v.name] = v);
+        const table = document.getElementById('asignacionTable');
+        table.innerHTML = '';
+        localStorage.setItem("asignacion", JSON.stringify(asignacion));
+        Object.values(asignacion).forEach(v => {
+            table.innerHTML += `<tr><td>${v.name}</td><td>${v.capacity}</td><td>${v.productos.join(', ') || '---'}</td><td>${v.carga.toFixed(2)}</td></tr>`;
+        });
+    }
+
+    function generarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.setFontSize(16);
+        doc.text("Reporte de Despacho - OptiCarga", 10, 10);
+        let y = 20;
+        localStorage.setItem("asignacion", JSON.stringify(asignacion));
+        Object.values(asignacion).forEach(v => {
+            doc.setFontSize(12);
+            doc.text(`Vehículo: ${v.name}`, 10, y); y += 6;
+            doc.text(`Capacidad: ${v.capacity} kg`, 10, y); y += 6;
+            doc.text(`Carga usada: ${v.carga.toFixed(2)} kg`, 10, y); y += 6;
+            doc.text(`Productos: ${v.productos.join(', ') || '---'}`, 10, y); y += 10;
+        });
+        doc.save("Reporte_OptiCarga.pdf");
+    }
+
+    function cerrarSesion() {
+        localStorage.setItem('productos', JSON.stringify(productos));
+        localStorage.setItem('vehiculos', JSON.stringify(vehiculos));
+        localStorage.setItem('asignacion', JSON.stringify(asignacion));
+        document.getElementById('appSection').classList.add('hidden');
+        document.getElementById('loginSection').classList.remove('hidden');
+    }
+</script>
+</body>
+</html>
